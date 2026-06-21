@@ -26,6 +26,7 @@ dependencies = [
 
 [project.optional-dependencies]
 nlp = [
+    "jieba>=0.42.1,<1.0",
     "spacy>=3.7.0",
 ]
 vector-stores = [

@@ -15,8 +15,37 @@ results (e.g., "meeting" as noun vs verb -> different lemmas).
 from __future__ import annotations
 
 import logging
+import re
 
 logger = logging.getLogger(__name__)
+
+_CJK_RE = re.compile(r"[\u3400-\u4dbf\u4e00-\u9fff]")
+_TOKEN_RE = re.compile(r"[\w\u3400-\u4dbf\u4e00-\u9fff]+", re.UNICODE)
+_jieba_unavailable_logged = False
+
+
+def _contains_cjk(text: str) -> bool:
+    return bool(_CJK_RE.search(text))
+
+
+def _tokenize_cjk_for_bm25(text: str) -> str:
+    global _jieba_unavailable_logged
+
+    try:
+        import jieba
+    except ImportError:
+        if not _jieba_unavailable_logged:
+            logger.warning("jieba is not installed. Install it with: pip install mem0ai[nlp]")
+            _jieba_unavailable_logged = True
+        return text
+
+    tokens = []
+    for token in jieba.cut_for_search(text.lower()):
+        token = token.strip()
+        if token and _TOKEN_RE.fullmatch(token):
+            tokens.append(token)
+
+    return " ".join(tokens) if tokens else text
 
 
 def lemmatize_for_bm25(text: str) -> str:
@@ -25,6 +54,9 @@ def lemmatize_for_bm25(text: str) -> str:
     Returns space-joined lemmas for full-text search. Falls back to
     the original text if spaCy is unavailable.
     """
+    if _contains_cjk(text):
+        return _tokenize_cjk_for_bm25(text)
+
     from mem0.utils.spacy_models import get_nlp_lemma
 
     nlp = get_nlp_lemma()
