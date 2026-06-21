@@ -7,8 +7,10 @@ from unittest.mock import MagicMock, patch
 from mem0.vector_stores.pgvector import (
     PGVector,
     _build_filter_conditions,
+    _scale_pg_full_text_score,
     _with_sslmode,
 )
+from mem0.utils.scoring import get_bm25_params, normalize_bm25
 
 
 class TestPGVector(unittest.TestCase):
@@ -35,6 +37,14 @@ class TestPGVector(unittest.TestCase):
         self.test_vectors = [[0.1, 0.2, 0.3], [0.4, 0.5, 0.6]]
         self.test_payloads = [{"key": "value1"}, {"key": "value2"}]
         self.test_ids = [str(uuid.uuid4()), str(uuid.uuid4())]
+
+    def test_pg_full_text_score_scaled_for_bm25_normalizer(self):
+        query = "深色 主题 python 编程"
+        scaled_score = _scale_pg_full_text_score(0.05, query)
+        midpoint, steepness = get_bm25_params(query, lemmatized=query)
+
+        self.assertEqual(scaled_score, midpoint)
+        self.assertAlmostEqual(normalize_bm25(scaled_score, midpoint=midpoint, steepness=steepness), 0.5)
 
     @patch('mem0.vector_stores.pgvector.PSYCOPG_VERSION', 3)
     @patch('mem0.vector_stores.pgvector.ConnectionPool')

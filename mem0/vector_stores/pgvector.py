@@ -33,6 +33,21 @@ from mem0.vector_stores.base import VectorStoreBase
 
 logger = logging.getLogger(__name__)
 
+PG_TS_RANK_CD_REFERENCE_SCORE = 0.05
+
+
+def _scale_pg_full_text_score(score: float, query: str = "") -> float:
+    """Map PostgreSQL's fractional FTS rank onto the BM25-like scale used downstream."""
+    raw_score = max(0.0, float(score))
+    if raw_score == 0.0:
+        return 0.0
+
+    from mem0.utils.scoring import get_bm25_params
+
+    midpoint, _ = get_bm25_params(query, lemmatized=query)
+    return raw_score * (midpoint / PG_TS_RANK_CD_REFERENCE_SCORE)
+
+
 OPERATOR_SQL_MAP = {
     "eq": ("payload->>%s = %s", False),
     "ne": ("payload->>%s != %s", False),
@@ -393,7 +408,7 @@ class PGVector(VectorStoreBase):
                 )
 
                 results = cur.fetchall()
-            return [OutputData(id=str(r[0]), score=float(r[1]), payload=r[2]) for r in results]
+            return [OutputData(id=str(r[0]), score=_scale_pg_full_text_score(r[1], query), payload=r[2]) for r in results]
         except Exception as e:
             logger.debug(f"Keyword search failed: {e}")
             return None
